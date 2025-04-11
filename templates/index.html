@@ -1,0 +1,166 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block nav_dashboard %}border-indigo-500 text-gray-900{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between">
+            <h1 class="text-2xl font-semibold text-gray-900">Real-time Monitoring</h1>
+            <span id="lastUpdate" class="text-sm text-gray-500">
+                Last updated: Just now
+            </span>
+        </div>
+    </div>
+
+    <!-- Risk Level Card -->
+    <div id="riskCard" class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-lg font-medium text-gray-900 mb-4">Current Risk Level</h2>
+        <div class="flex items-center space-x-4">
+            <div id="riskIndicator" class="w-16 h-16 rounded-full flex items-center justify-center text-white bg-green-500">
+                <i class="fas fa-smile text-2xl"></i>
+            </div>
+            <div>
+                <p id="riskLevel" class="text-xl font-semibold text-gray-900">Low Risk</p>
+                <p id="riskMessage" class="text-sm text-gray-500">Everything looks good!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Mouse Activity -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-medium text-gray-900">Mouse Activity</h2>
+                <i class="fas fa-mouse text-gray-400"></i>
+            </div>
+            <div class="mt-4">
+                <p id="mouseClicks" class="text-3xl font-bold text-indigo-600">0</p>
+                <p class="text-sm text-gray-500">clicks today</p>
+            </div>
+        </div>
+
+        <!-- Keyboard Activity -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-medium text-gray-900">Keyboard Activity</h2>
+                <i class="fas fa-keyboard text-gray-400"></i>
+            </div>
+            <div class="mt-4">
+                <p id="keyPresses" class="text-3xl font-bold text-indigo-600">0</p>
+                <p class="text-sm text-gray-500">key presses today</p>
+            </div>
+        </div>
+
+        <!-- Screen Time -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-medium text-gray-900">Screen Time</h2>
+                <i class="fas fa-clock text-gray-400"></i>
+            </div>
+            <div class="mt-4">
+                <p id="screenTime" class="text-3xl font-bold text-indigo-600">0h 0m</p>
+                <p class="text-sm text-gray-500">total time today</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Application -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-medium text-gray-900">Current Application</h2>
+            <i class="fas fa-window-maximize text-gray-400"></i>
+        </div>
+        <p id="currentApp" class="mt-2 text-gray-600">Not tracking</p>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-medium text-gray-900">Recommendations</h2>
+            <i class="fas fa-lightbulb text-yellow-400"></i>
+        </div>
+        <ul id="recommendations" class="space-y-3">
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mt-1 mr-2"></i>
+                <span class="text-gray-600">Loading recommendations...</span>
+            </li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Risk level styling configurations
+    const riskStyles = {
+        low: {
+            bgColor: 'bg-green-500',
+            icon: 'fa-smile',
+            message: 'Everything looks good!'
+        },
+        medium: {
+            bgColor: 'bg-yellow-500',
+            icon: 'fa-meh',
+            message: 'Consider taking a break soon'
+        },
+        high: {
+            bgColor: 'bg-red-500',
+            icon: 'fa-frown',
+            message: 'Time to take action!'
+        }
+    };
+
+    // Update the UI with new metrics
+    function updateMetrics(data) {
+        // Update activity counts
+        document.getElementById('mouseClicks').textContent = formatNumber(data.mouse_clicks);
+        document.getElementById('keyPresses').textContent = formatNumber(data.key_presses);
+        document.getElementById('screenTime').textContent = formatTime(data.screen_time);
+        document.getElementById('currentApp').textContent = data.current_app;
+
+        // Update risk level
+        const riskStyle = riskStyles[data.risk_level] || riskStyles.low;
+        const riskIndicator = document.getElementById('riskIndicator');
+        
+        // Remove old color class and add new one
+        riskIndicator.className = `w-16 h-16 rounded-full flex items-center justify-center text-white ${riskStyle.bgColor}`;
+        riskIndicator.innerHTML = `<i class="fas ${riskStyle.icon} text-2xl"></i>`;
+        
+        document.getElementById('riskLevel').textContent = 
+            data.risk_level.charAt(0).toUpperCase() + data.risk_level.slice(1) + ' Risk';
+        document.getElementById('riskMessage').textContent = riskStyle.message;
+
+        // Update recommendations
+        const recommendationsList = document.getElementById('recommendations');
+        recommendationsList.innerHTML = data.recommendations.map(rec => `
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mt-1 mr-2"></i>
+                <span class="text-gray-600">${rec}</span>
+            </li>
+        `).join('');
+
+        // Update timestamp
+        document.getElementById('lastUpdate').textContent = 
+            'Last updated: ' + new Date().toLocaleTimeString();
+    }
+
+    // Fetch metrics periodically
+    function fetchMetrics() {
+        fetch('/api/current_metrics')
+            .then(response => response.json())
+            .then(data => updateMetrics(data))
+            .catch(error => console.error('Error fetching metrics:', error));
+    }
+
+    // Update metrics every 5 seconds
+    setInterval(fetchMetrics, 5000);
+
+    // Initial fetch
+    fetchMetrics();
+</script>
+{% endblock %}
