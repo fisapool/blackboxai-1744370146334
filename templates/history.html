@@ -1,0 +1,199 @@
+{% extends "layout.html" %}
+
+{% block title %}History{% endblock %}
+
+{% block nav_history %}border-indigo-500 text-gray-900{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between">
+            <h1 class="text-2xl font-semibold text-gray-900">Activity History</h1>
+            <div class="flex space-x-4">
+                <select id="timeRange" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="24">Last 24 Hours</option>
+                    <option value="48">Last 48 Hours</option>
+                    <option value="168">Last Week</option>
+                </select>
+                <button id="refreshBtn" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <i class="fas fa-sync-alt mr-2"></i>
+                    Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Total Screen Time -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-medium text-gray-900">Total Screen Time</h2>
+                <i class="fas fa-clock text-gray-400"></i>
+            </div>
+            <p id="totalScreenTime" class="mt-4 text-3xl font-bold text-indigo-600">0h 0m</p>
+        </div>
+
+        <!-- Activity Score -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-medium text-gray-900">Activity Score</h2>
+                <i class="fas fa-chart-line text-gray-400"></i>
+            </div>
+            <p id="activityScore" class="mt-4 text-3xl font-bold text-indigo-600">0</p>
+        </div>
+
+        <!-- Risk Distribution -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-medium text-gray-900">Risk Distribution</h2>
+                <i class="fas fa-chart-pie text-gray-400"></i>
+            </div>
+            <div class="mt-4 flex space-x-4">
+                <div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-green-500 mr-2"></div>
+                        <span id="lowRiskCount" class="text-sm text-gray-600">0</span>
+                    </div>
+                    <p class="text-xs text-gray-500">Low</p>
+                </div>
+                <div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-yellow-500 mr-2"></div>
+                        <span id="mediumRiskCount" class="text-sm text-gray-600">0</span>
+                    </div>
+                    <p class="text-xs text-gray-500">Medium</p>
+                </div>
+                <div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
+                        <span id="highRiskCount" class="text-sm text-gray-600">0</span>
+                    </div>
+                    <p class="text-xs text-gray-500">High</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Timeline -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-lg font-medium text-gray-900 mb-4">Activity Timeline</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mouse Clicks</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Key Presses</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Screen Time</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risk Level</th>
+                    </tr>
+                </thead>
+                <tbody id="timelineBody" class="bg-white divide-y divide-gray-200">
+                    <tr>
+                        <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                            Loading activity data...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function updateTimeline(data) {
+        const timelineBody = document.getElementById('timelineBody');
+        
+        if (!data || data.length === 0) {
+            timelineBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                        No activity data available for the selected time range
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        // Sort data by timestamp (newest first)
+        data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        // Calculate summary statistics
+        let totalScreenTime = 0;
+        let totalClicks = 0;
+        let totalKeyPresses = 0;
+        let riskCounts = { low: 0, medium: 0, high: 0 };
+
+        // Generate timeline rows
+        const rows = data.map(entry => {
+            const metrics = entry.metrics;
+            const timestamp = new Date(entry.timestamp);
+            
+            // Update summary stats
+            totalScreenTime = Math.max(totalScreenTime, metrics.screen_time || 0);
+            totalClicks += metrics.mouse_clicks || 0;
+            totalKeyPresses += metrics.key_presses || 0;
+            riskCounts[metrics.risk_level || 'low']++;
+
+            // Generate row HTML
+            return `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${timestamp.toLocaleString()}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${formatNumber(metrics.mouse_clicks || 0)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${formatNumber(metrics.key_presses || 0)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${formatTime(metrics.screen_time || 0)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${metrics.risk_level === 'high' ? 'bg-red-100 text-red-800' :
+                              metrics.risk_level === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'}">
+                            ${(metrics.risk_level || 'low').charAt(0).toUpperCase() + 
+                              (metrics.risk_level || 'low').slice(1)}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Update timeline
+        timelineBody.innerHTML = rows;
+
+        // Update summary stats
+        document.getElementById('totalScreenTime').textContent = formatTime(totalScreenTime);
+        document.getElementById('activityScore').textContent = 
+            Math.round((totalClicks + totalKeyPresses) / data.length);
+        
+        // Update risk distribution
+        document.getElementById('lowRiskCount').textContent = riskCounts.low;
+        document.getElementById('mediumRiskCount').textContent = riskCounts.medium;
+        document.getElementById('highRiskCount').textContent = riskCounts.high;
+    }
+
+    function fetchHistory() {
+        const hours = document.getElementById('timeRange').value;
+        fetch(`/api/history?hours=${hours}`)
+            .then(response => response.json())
+            .then(data => updateTimeline(data))
+            .catch(error => console.error('Error fetching history:', error));
+    }
+
+    // Event listeners
+    document.getElementById('timeRange').addEventListener('change', fetchHistory);
+    document.getElementById('refreshBtn').addEventListener('click', fetchHistory);
+
+    // Initial fetch
+    fetchHistory();
+</script>
+{% endblock %}
